@@ -2,11 +2,12 @@ use std::error::Error;
 
 use macroquad::prelude::{
     animation::{AnimatedSprite, Animation},
+    scene::camera_pos,
     *,
 };
 
 use crate::{
-    components::{Position, Sprite},
+    components::{Collider, Controllable, Player, Position, Sprite, Velocity},
     resources::Resources,
     world::World,
 };
@@ -39,40 +40,21 @@ async fn main() {
 }
 
 async fn run() -> Result<(), Box<dyn Error>> {
-    Resources::load_all().await?;
     let mut world = World::new();
+    let mut resources = Resources::load_all(&mut world).await?;
 
-    let entity_id = world.add_entity();
-    world.add_component_to_entity(
-        entity_id,
-        Sprite {
-            sprite_id: 0,
-            texture: resources::load_and_set_filter("images/player.png").await?,
-            source_rect: Some(Rect::new(0.0, 0.0, 48.0, 48.0)),
-            dest_size: Some(Vec2::new(96.0, 96.0)),
-            animation: Some(AnimatedSprite::new(
-                48,
-                48,
-                &[Animation {
-                    name: "idle".to_string(),
-                    row: 0,
-                    frames: 2,
-                    fps: 4,
-                }],
-                true,
-            )),
-        },
-    );
-    world.add_component_to_entity(entity_id, Position { x: 32.0, y: 48.0 });
+    world.spawn_player(120., 120.).await?;
 
     loop {
-        clear_background(DARKGREEN);
+        clear_background(BLANK);
 
-        // world.render_entities(&tiled_map);
-        // draw_texture_ex(&tileset, x, y, color, params);``
-        systems::tilemap_render_system();
+        systems::tilemap_render_system(&resources.tiled_map);
+
         systems::animation_systems(&mut world);
-        systems::render_systems(&world);
+        systems::render_systems(&mut world);
+        systems::input_systems(&mut world);
+        systems::movement_systems(&mut world, &resources.tiled_map);
+        systems::camera_systems(&mut world, &mut resources);
         next_frame().await;
     }
 }

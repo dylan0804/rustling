@@ -1,10 +1,14 @@
-use std::any::Any;
+use std::{any::Any, collections::HashMap, error::Error};
 
-use macroquad::{math::Rect, prelude::animation::AnimatedSprite};
-use macroquad_tiled::Map;
+use macroquad::{
+    math::{Rect, Vec2},
+    prelude::animation::{AnimatedSprite, Animation},
+    texture::Texture2D,
+};
+use macroquad_tiled::Object;
 
 use crate::{
-    components::{Position, Size, Sprite},
+    components::{Collider, Controllable, Player, Position, Sprite, Velocity},
     entity::Entity,
     query::ComponentQuery,
 };
@@ -24,6 +28,23 @@ impl<T: 'static> ComponentVec for Vec<Option<T>> {
     }
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self as &mut dyn Any
+    }
+}
+
+pub struct EntityBuilder<'a> {
+    world: &'a mut World,
+    entity_id: usize,
+}
+
+impl<'a> EntityBuilder<'a> {
+    pub fn new(world: &'a mut World, entity_id: usize) -> Self {
+        Self { world, entity_id }
+    }
+
+    pub fn with<ComponentType: 'static>(self, component: ComponentType) -> Self {
+        self.world
+            .add_component_to_entity(self.entity_id, component);
+        self
     }
 }
 
@@ -50,6 +71,11 @@ impl World {
 
         self.entities_count += 1;
         entity_id
+    }
+
+    pub fn spawn_entity(&mut self) -> EntityBuilder {
+        let entity_id = self.add_entity();
+        EntityBuilder::new(self, entity_id)
     }
 
     pub fn add_component_to_entity<ComponentType: 'static>(
@@ -109,29 +135,140 @@ impl World {
         None
     }
 
-    pub fn query<'a, T>(&'a self) -> Vec<T::Output>
+    pub fn query<'a, T>(&'a mut self) -> Vec<T::Output>
     where
         T: ComponentQuery<'a>,
     {
-        T::find_entities(&self)
+        T::find_entities(self)
     }
 
-    pub fn query_mut<ComponentType: 'static>(&mut self) -> Vec<&mut ComponentType> {
-        let mut results = Vec::new();
-        for component_vec in self.components_vec.iter_mut() {
-            if let Some(component_vec) = component_vec
-                .as_any_mut()
-                .downcast_mut::<Vec<Option<ComponentType>>>()
-            {
-                for component_type in component_vec {
-                    if let Some(component) = component_type {
-                        results.push(component);
-                    }
-                }
-                break;
-            }
-        }
+    // pub fn query_mut<ComponentType: 'static>(&mut self) -> Vec<&mut ComponentType> {
+    //     let mut results = Vec::new();
+    //     for component_vec in self.components_vec.iter_mut() {
+    //         if let Some(component_vec) = component_vec
+    //             .as_any_mut()
+    //             .downcast_mut::<Vec<Option<ComponentType>>>()
+    //         {
+    //             for component_type in component_vec {
+    //                 if let Some(component) = component_type {
+    //                     results.push(component);
+    //                 }
+    //             }
+    //             break;
+    //         }
+    //     }
+    //
+    //     results
+    // }
 
-        results
+    pub fn add_object(
+        &mut self,
+        object: &Object,
+        core_assets: &HashMap<String, Texture2D>,
+    ) -> Result<(), Box<dyn Error>> {
+        let entity_id = self.add_entity();
+        let properties = &object.properties;
+
+        self.add_component_to_entity(
+            entity_id,
+            Position {
+                x: object.world_x,
+                y: object.world_y,
+            },
+        );
+        self.add_component_to_entity(
+            entity_id,
+            Sprite {
+                texture: core_assets[&format!("images/core/{}.png", object.name)].clone(),
+                source_rect: Some(Rect::new(
+                    properties["source_rect_x"].parse::<f32>()?,
+                    properties["source_rect_y"].parse::<f32>()?,
+                    properties["source_rect_w"].parse::<f32>()?,
+                    properties["source_rect_h"].parse::<f32>()?,
+                )),
+                dest_size: Some(Vec2::new(
+                    properties["dest_size_x"].parse::<f32>()?,
+                    properties["dest_size_y"].parse::<f32>()?,
+                )),
+                animation: Some(AnimatedSprite::new(
+                    object.world_w as u32,
+                    object.world_h as u32,
+                    &[Animation {
+                        name: object.name.to_string(),
+                        row: 0,
+                        frames: 2,
+                        fps: 4,
+                    }],
+                    true,
+                )),
+                flipped: false,
+                last_animation: 0,
+            },
+        );
+
+        Ok(())
+    }
+
+    pub async fn spawn_player(&mut self, x: f32, y: f32) -> Result<(), Box<dyn Error>> {
+        self.spawn_entity()
+            .with(Sprite {
+                texture: crate::resources::load_and_set_filter("images/content/player.png").await?,
+                source_rect: Some(Rect::new(0.0, 0.0, 48.0, 48.0)),
+                dest_size: Some(Vec2::new(48.0, 48.0)),
+                animation: Some(AnimatedSprite::new(
+                    48,
+                    48,
+                    &[
+                        Animation {
+                            name: "idle".to_string(),
+                            row: 0,
+                            frames: 6,
+                            fps: 4,
+                        },
+                        Animation {
+                            name: "down".to_string(),
+                            row: 3,
+                            frames: 6,
+                            fps: 4,
+                        },
+                        Animation {
+                            name: "right".to_string(),
+                            row: 4,
+                            frames: 6,
+                            fps: 4,
+                        },
+                        Animation {
+                            name: "idle_right".to_string(),
+                            row: 1,
+                            frames: 6,
+                            fps: 4,
+                        },
+                        Animation {
+                            name: "up".to_string(),
+                            row: 5,
+                            frames: 6,
+                            fps: 4,
+                        },
+                        Animation {
+                            name: "up_idle".to_string(),
+                            row: 2,
+                            frames: 6,
+                            fps: 4,
+                        },
+                    ],
+                    true,
+                )),
+                flipped: false,
+                last_animation: 0,
+            })
+            .with(Position { x, y })
+            .with(Controllable::default())
+            .with(Velocity::default())
+            .with(Collider {
+                offset: Vec2::new(17., 38.),
+                size: Vec2::new(14., 5.),
+            })
+            .with(Player);
+        Ok(())
     }
 }

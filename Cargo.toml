@@ -4,5 +4,6 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+include_dir = { version = "0.7.4", features = ["glob"] }
 macroquad = "0.4.14"
 macroquad-tiled = { path = "./tiled" }
