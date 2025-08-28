@@ -35,8 +35,10 @@ impl Default for Controllable {
 }
 
 pub struct Collider {
-    pub offset: Vec2,
-    pub size: Vec2,
+    pub collision_offset: Vec2, // feet collision offset -> for object collisions
+    pub collision_size: Vec2,
+    pub sprite_padding: Vec2,
+    pub visible_size: Vec2,
 }
 
 pub struct Player;

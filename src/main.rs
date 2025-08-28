@@ -1,16 +1,8 @@
 use std::error::Error;
 
-use macroquad::prelude::{
-    animation::{AnimatedSprite, Animation},
-    scene::camera_pos,
-    *,
-};
+use macroquad::prelude::*;
 
-use crate::{
-    components::{Collider, Controllable, Player, Position, Sprite, Velocity},
-    resources::Resources,
-    world::World,
-};
+use crate::{resources::Resources, world::World};
 
 pub mod components;
 pub mod entity;

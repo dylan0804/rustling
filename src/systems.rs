@@ -6,6 +6,7 @@ use macroquad::{
     shapes::draw_rectangle,
     texture::{draw_texture_ex, DrawTextureParams},
     time::get_frame_time,
+    window::{screen_height, screen_width},
 };
 use macroquad_tiled::Map;
 
@@ -39,6 +40,14 @@ pub fn render_systems(world: &mut World) {
 }
 
 pub fn tilemap_render_system(tiled_map: &Map) {
+    // println!(
+    //     "Map size: {}x{}",
+    //     tiled_map.raw_tiled_map.width, tiled_map.raw_tiled_map.height
+    // );
+    // println!(
+    //     "Tile size: {}x{}",
+    //     tiled_map.raw_tiled_map.tilewidth, tiled_map.raw_tiled_map.tileheight
+    // );
     tiled_map.draw_tiles("background", Rect::new(0.0, 0.0, 960.0, 960.0), None);
     tiled_map.draw_tiles("decorations", Rect::new(0.0, 0.0, 960.0, 960.0), None);
 }
@@ -121,15 +130,20 @@ pub fn movement_systems(world: &mut World, map: &Map) {
     for (position, velocity, collider) in world.query::<(&mut Position, &Velocity, &Collider)>() {
         let new_pos = Vec2::new(position.x + velocity.x * dt, position.y + velocity.y * dt);
         let collision_box = Rect::new(
-            new_pos.x + collider.offset.x,
-            new_pos.y + collider.offset.y,
-            collider.size.x,
-            collider.size.y,
+            new_pos.x + collider.collision_offset.x,
+            new_pos.y + collider.collision_offset.y,
+            collider.collision_size.x,
+            collider.collision_size.y,
         );
 
         if !check_collision_with_objects(collision_box, &map) {
-            position.x = new_pos.x;
-            position.y = new_pos.y;
+            let clamped_x =
+                (new_pos.x + collider.sprite_padding.x).clamp(0.0, 960.0 - collider.visible_size.x);
+            let clamped_y =
+                (new_pos.y + collider.sprite_padding.y).clamp(0.0, 960.0 - collider.visible_size.y);
+
+            position.x = clamped_x - collider.sprite_padding.x;
+            position.y = clamped_y - collider.sprite_padding.y;
         }
     }
 }
@@ -156,27 +170,30 @@ pub fn camera_systems(world: &mut World, resources: &mut Resources) {
         let target_x = position.x + 24.0; // center on player
         let target_y = position.y + 24.0;
 
-        // World dimensions (60x60 tiles * 16 pixels per tile = 960x960)
-        let world_width = 960.0;
-        let world_height = 960.0;
-
-        // Calculate how much of the world the camera can see
-        let zoom_x = resources.camera.zoom.x;
-        let zoom_y = resources.camera.zoom.y;
-        let viewport_width = 1.0 / zoom_x; // world units visible horizontally
-        let viewport_height = 1.0 / zoom_y; // world units visible vertically
-
-        // Calculate clamping bounds to prevent showing black area
-        let min_target_x = viewport_width / 2.0;
-        let max_target_x = world_width - viewport_width / 2.0;
-        let min_target_y = viewport_height / 2.0;
-        let max_target_y = world_height - viewport_height / 2.0;
-
+        // // World dimensions (60x60 tiles * 16 pixels per tile = 960x960)
+        // let world_width = 960.0;
+        // let world_height = 960.0;
+        //
+        // // Calculate how much of the world the camera can see
+        // let zoom_x = resources.camera.zoom.x;
+        // let zoom_y = resources.camera.zoom.y;
+        //
+        // // Convert zoom back to viewport size in world units
+        // // zoom = desired_world_units / screen_pixels
+        // // so: desired_world_units = zoom * screen_pixels
+        // let viewport_width = 0.25 * screen_width();
+        // let viewport_height = 0.333 * screen_height();
+        // // println!("{} {}", viewport_width, viewport_height);
+        //
+        // // Calculate clamping bounds to prevent showing black area
+        // // Camera target should never be closer to edge than half viewport
+        // let min_target_x = viewport_width / 2.0;
+        // let max_target_x = world_width - viewport_width / 2.0;
+        // let min_target_y = viewport_height / 2.0;
+        // let max_target_y = world_height - viewport_height / 2.0;
+        //
         // Clamp camera target
-        resources.camera.target = Vec2::new(
-            target_x.clamp(min_target_x, max_target_x),
-            target_y.clamp(min_target_y, max_target_y),
-        );
+        resources.camera.target = Vec2::new(target_x, target_y);
 
         set_camera(&resources.camera);
         return; // player only

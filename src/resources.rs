@@ -33,7 +33,7 @@ impl Resources {
         let core_assets = Self::load_core_assets("images/core/*.png").await?;
         let tiled_map = Self::load_map(world, &core_assets).await?;
         let camera = Camera2D {
-            zoom: Vec2::new(6.0 / screen_width(), 6.0 / screen_height()),
+            zoom: Vec2::new(5.0 / screen_width(), 5.0 / screen_height()),
             ..Default::default()
         };
         Ok(Self {

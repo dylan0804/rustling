@@ -1,4 +1,4 @@
-use std::{any::Any, collections::HashMap, error::Error};
+use std::{any::Any, collections::HashMap, error::Error, vec};
 
 use macroquad::{
     math::{Rect, Vec2},
@@ -265,8 +265,10 @@ impl World {
             .with(Controllable::default())
             .with(Velocity::default())
             .with(Collider {
-                offset: Vec2::new(17., 38.),
-                size: Vec2::new(14., 5.),
+                collision_offset: Vec2::new(17., 38.),
+                collision_size: Vec2::new(14., 5.),
+                sprite_padding: Vec2::new(18.0, 20.0),
+                visible_size: Vec2::new(18.0, 26.0),
             })
             .with(Player);
         Ok(())
