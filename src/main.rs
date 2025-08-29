@@ -35,7 +35,7 @@ async fn run() -> Result<(), Box<dyn Error>> {
     let mut world = World::new();
     let mut resources = Resources::load_all(&mut world).await?;
 
-    world.spawn_player(120., 120.).await?;
+    world.spawn_player(232., 232.).await?;
 
     loop {
         clear_background(BLANK);

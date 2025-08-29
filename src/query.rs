@@ -1,6 +1,6 @@
 use crate::{
-    components::{Collider, Controllable, Player, Position, Sprite, Velocity},
-    world::{self, World},
+    components::{AttackState, Collider, Controllable, Player, Position, Sprite, Velocity},
+    world::World,
 };
 
 pub trait ComponentQuery<'a> {
@@ -46,8 +46,8 @@ impl<'a> ComponentQuery<'a> for (&'a mut Velocity, &'a Controllable) {
     }
 }
 
-impl<'a> ComponentQuery<'a> for (&'a mut Sprite, &'a Velocity) {
-    type Output = (&'a mut Sprite, &'a Velocity);
+impl<'a> ComponentQuery<'a> for (&'a mut Sprite, &'a Velocity, &'a AttackState) {
+    type Output = (&'a mut Sprite, &'a Velocity, &'a AttackState);
 
     fn find_entities(world: &'a mut World) -> Vec<Self::Output> {
         let mut entities = Vec::new();
@@ -55,11 +55,12 @@ impl<'a> ComponentQuery<'a> for (&'a mut Sprite, &'a Velocity) {
         unsafe {
             let world_ptr = &raw mut *world;
             for entity in 0..(*world_ptr).entities_count {
-                if let (Some(sprite), Some(velocity)) = (
+                if let (Some(sprite), Some(velocity), Some(attack_state)) = (
                     (*world_ptr).get_component_mut::<Sprite>(entity),
                     (*world_ptr).get_component::<Velocity>(entity),
+                    (*world_ptr).get_component::<AttackState>(entity),
                 ) {
-                    entities.push((sprite, velocity));
+                    entities.push((sprite, velocity, attack_state));
                 }
             }
         }
@@ -117,6 +118,25 @@ impl<'a> ComponentQuery<'a> for &'a mut Sprite {
             let world_ptr = &raw mut *world;
             for entity in 0..(*world_ptr).entities_count {
                 if let Some(sprite) = (*world_ptr).get_component_mut::<Sprite>(entity) {
+                    entities.push(sprite);
+                }
+            }
+        }
+
+        entities
+    }
+}
+
+impl<'a> ComponentQuery<'a> for &'a mut AttackState {
+    type Output = &'a mut AttackState;
+
+    fn find_entities(world: &'a mut World) -> Vec<Self::Output> {
+        let mut entities = Vec::new();
+
+        unsafe {
+            let world_ptr = &raw mut *world;
+            for entity in 0..(*world_ptr).entities_count {
+                if let Some(sprite) = (*world_ptr).get_component_mut::<AttackState>(entity) {
                     entities.push(sprite);
                 }
             }

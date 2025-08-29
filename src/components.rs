@@ -41,4 +41,10 @@ pub struct Collider {
     pub visible_size: Vec2,
 }
 
+#[derive(Default)]
+pub struct AttackState {
+    pub attacking: bool,
+    pub attack_timer: f32,
+}
+
 pub struct Player;

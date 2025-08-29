@@ -8,7 +8,7 @@ use macroquad::{
 use macroquad_tiled::Object;
 
 use crate::{
-    components::{Collider, Controllable, Player, Position, Sprite, Velocity},
+    components::{AttackState, Collider, Controllable, Player, Position, Sprite, Velocity},
     entity::Entity,
     query::ComponentQuery,
 };
@@ -173,7 +173,7 @@ impl World {
             entity_id,
             Position {
                 x: object.world_x,
-                y: object.world_y,
+                y: object.world_y - properties["dest_size_y"].parse::<f32>()?,
             },
         );
         self.add_component_to_entity(
@@ -195,9 +195,9 @@ impl World {
                     object.world_h as u32,
                     &[Animation {
                         name: object.name.to_string(),
-                        row: 0,
-                        frames: 2,
-                        fps: 4,
+                        row: properties["row"].parse::<u32>()?,
+                        frames: properties["frames"].parse::<u32>()?,
+                        fps: 8,
                     }],
                     true,
                 )),
@@ -255,6 +255,30 @@ impl World {
                             frames: 6,
                             fps: 4,
                         },
+                        Animation {
+                            name: "attack_down".to_string(),
+                            row: 6,
+                            frames: 4,
+                            fps: 4,
+                        },
+                        Animation {
+                            name: "attack_sides".to_string(),
+                            row: 7,
+                            frames: 4,
+                            fps: 4,
+                        },
+                        Animation {
+                            name: "attack_up".to_string(),
+                            row: 8,
+                            frames: 4,
+                            fps: 4,
+                        },
+                        Animation {
+                            name: "death".to_string(),
+                            row: 9,
+                            frames: 3,
+                            fps: 4,
+                        },
                     ],
                     true,
                 )),
@@ -270,6 +294,7 @@ impl World {
                 sprite_padding: Vec2::new(18.0, 20.0),
                 visible_size: Vec2::new(18.0, 26.0),
             })
+            .with(AttackState::default())
             .with(Player);
         Ok(())
     }

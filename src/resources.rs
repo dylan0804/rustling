@@ -74,16 +74,28 @@ impl Resources {
                     core_assets["images/core/plains.png"].clone(),
                 ),
                 (
-                    "images/core/water-sheet.png",
-                    core_assets["images/core/water-sheet.png"].clone(),
-                ),
-                (
                     "images/core/rock_in_water.png",
                     core_assets["images/core/rock_in_water.png"].clone(),
                 ),
                 (
                     "images/core/water_decorations.png",
                     core_assets["images/core/water_decorations.png"].clone(),
+                ),
+                (
+                    "images/core/water-sheet2.png",
+                    core_assets["images/core/water-sheet2.png"].clone(),
+                ),
+                (
+                    "images/core/wooden_door.png",
+                    core_assets["images/core/wooden_door.png"].clone(),
+                ),
+                (
+                    "images/core/walls.png",
+                    core_assets["images/core/walls.png"].clone(),
+                ),
+                (
+                    "images/core/wooden.png",
+                    core_assets["images/core/wooden.png"].clone(),
                 ),
             ],
             &[],

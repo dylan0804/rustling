@@ -11,8 +11,8 @@ use macroquad::{
 use macroquad_tiled::Map;
 
 use crate::{
-    components::{Collider, Controllable, Player, Position, Sprite, Velocity},
-    resources::Resources,
+    components::{AttackState, Collider, Controllable, Player, Position, Sprite, Velocity},
+    resources::{self, Resources},
     world::{self, World},
 };
 
@@ -40,21 +40,15 @@ pub fn render_systems(world: &mut World) {
 }
 
 pub fn tilemap_render_system(tiled_map: &Map) {
-    // println!(
-    //     "Map size: {}x{}",
-    //     tiled_map.raw_tiled_map.width, tiled_map.raw_tiled_map.height
-    // );
-    // println!(
-    //     "Tile size: {}x{}",
-    //     tiled_map.raw_tiled_map.tilewidth, tiled_map.raw_tiled_map.tileheight
-    // );
-    tiled_map.draw_tiles("background", Rect::new(0.0, 0.0, 960.0, 960.0), None);
-    tiled_map.draw_tiles("decorations", Rect::new(0.0, 0.0, 960.0, 960.0), None);
+    tiled_map.draw_tiles("background", Rect::new(0.0, 0.0, 960.0, 512.0), None);
+    tiled_map.draw_tiles("decorations", Rect::new(0.0, 0.0, 960.0, 512.0), None);
+    tiled_map.draw_tiles("decorations_2", Rect::new(0.0, 0.0, 960.0, 512.0), None);
 }
 
 pub fn animation_systems(world: &mut World) {
     // update moving animation
-    for (sprite, velocity) in world.query::<(&mut Sprite, &Velocity)>() {
+    for (sprite, velocity, attack_state) in world.query::<(&mut Sprite, &Velocity, &AttackState)>()
+    {
         if let Some(ref mut anim) = sprite.animation {
             if velocity.x != 0.0 || velocity.y != 0.0 {
                 let animation_index = match (velocity.x, velocity.y) {
@@ -86,6 +80,15 @@ pub fn animation_systems(world: &mut World) {
                 };
                 anim.set_animation(idle_animation);
             }
+            if attack_state.attacking {
+                anim.set_animation(match sprite.last_animation {
+                    2 => 7,
+                    4 => 8,
+                    1 => 6,
+                    _ => 0,
+                });
+            }
+
             anim.update();
         }
     }
@@ -115,12 +118,26 @@ pub fn input_systems(world: &mut World) {
         if is_key_down(KeyCode::Right) {
             velocity.x = controllable.walk_speed
         }
-
         // normalize diagonal movement
         let length = (velocity.x * velocity.x + velocity.y * velocity.y).sqrt();
         if length > 0.0 {
             velocity.x = (velocity.x / length) * controllable.walk_speed;
             velocity.y = (velocity.y / length) * controllable.walk_speed;
+        }
+    }
+
+    for attack_state in world.query::<&mut AttackState>() {
+        if is_key_down(KeyCode::Z) {
+            attack_state.attacking = true;
+            attack_state.attack_timer = 0.3;
+        }
+
+        // countdown attack_timer
+        if attack_state.attack_timer >= 0.0 {
+            attack_state.attack_timer -= get_frame_time();
+            if attack_state.attack_timer <= 0.0 {
+                attack_state.attacking = false;
+            }
         }
     }
 }
@@ -140,7 +157,7 @@ pub fn movement_systems(world: &mut World, map: &Map) {
             let clamped_x =
                 (new_pos.x + collider.sprite_padding.x).clamp(0.0, 960.0 - collider.visible_size.x);
             let clamped_y =
-                (new_pos.y + collider.sprite_padding.y).clamp(0.0, 960.0 - collider.visible_size.y);
+                (new_pos.y + collider.sprite_padding.y).clamp(0.0, 512.0 - collider.visible_size.y);
 
             position.x = clamped_x - collider.sprite_padding.x;
             position.y = clamped_y - collider.sprite_padding.y;
@@ -170,30 +187,12 @@ pub fn camera_systems(world: &mut World, resources: &mut Resources) {
         let target_x = position.x + 24.0; // center on player
         let target_y = position.y + 24.0;
 
-        // // World dimensions (60x60 tiles * 16 pixels per tile = 960x960)
-        // let world_width = 960.0;
-        // let world_height = 960.0;
-        //
-        // // Calculate how much of the world the camera can see
-        // let zoom_x = resources.camera.zoom.x;
-        // let zoom_y = resources.camera.zoom.y;
-        //
-        // // Convert zoom back to viewport size in world units
-        // // zoom = desired_world_units / screen_pixels
-        // // so: desired_world_units = zoom * screen_pixels
-        // let viewport_width = 0.25 * screen_width();
-        // let viewport_height = 0.333 * screen_height();
-        // // println!("{} {}", viewport_width, viewport_height);
-        //
-        // // Calculate clamping bounds to prevent showing black area
-        // // Camera target should never be closer to edge than half viewport
-        // let min_target_x = viewport_width / 2.0;
-        // let max_target_x = world_width - viewport_width / 2.0;
-        // let min_target_y = viewport_height / 2.0;
-        // let max_target_y = world_height - viewport_height / 2.0;
-        //
-        // Clamp camera target
-        resources.camera.target = Vec2::new(target_x, target_y);
+        let viewport_width = 2.0 / &resources.camera.zoom.x;
+        let viewport_height = 2.0 / &resources.camera.zoom.y;
+
+        let clamped_x = target_x.clamp(256.0, 960.0 - 256.0);
+        let clamped_y = target_y.clamp(144.0, 512.0 - 144.0);
+        resources.camera.target = Vec2::new(clamped_x, clamped_y);
 
         set_camera(&resources.camera);
         return; // player only
