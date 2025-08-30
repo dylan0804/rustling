@@ -429,7 +429,6 @@ pub fn load_map(
             })
         };
 
-        println!("layer is {}", layer.ty.as_str());
         layers.insert(
             layer.name.clone(),
             match layer.ty.as_str() {

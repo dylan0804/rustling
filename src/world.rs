@@ -8,10 +8,14 @@ use macroquad::{
 use macroquad_tiled::Object;
 
 use crate::{
-    components::{AttackState, Collider, Controllable, Player, Position, Sprite, Velocity},
-    entity::Entity,
+    components::{Collider, Enemy, Player, Position, Sprite, Velocity},
+    entity::{Entity, EntityType},
     query::ComponentQuery,
+    resources,
 };
+
+pub static WORLD_WIDTH: f32 = 960.0;
+pub static WORLD_HEIGHT: f32 = 512.0;
 
 trait ComponentVec {
     fn push_none(&mut self);
@@ -142,25 +146,6 @@ impl World {
         T::find_entities(self)
     }
 
-    // pub fn query_mut<ComponentType: 'static>(&mut self) -> Vec<&mut ComponentType> {
-    //     let mut results = Vec::new();
-    //     for component_vec in self.components_vec.iter_mut() {
-    //         if let Some(component_vec) = component_vec
-    //             .as_any_mut()
-    //             .downcast_mut::<Vec<Option<ComponentType>>>()
-    //         {
-    //             for component_type in component_vec {
-    //                 if let Some(component) = component_type {
-    //                     results.push(component);
-    //                 }
-    //             }
-    //             break;
-    //         }
-    //     }
-    //
-    //     results
-    // }
-
     pub fn add_object(
         &mut self,
         object: &Object,
@@ -205,6 +190,72 @@ impl World {
                 last_animation: 0,
             },
         );
+
+        Ok(())
+    }
+
+    pub async fn spawn_enemy(&mut self, x: f32, y: f32) -> Result<(), Box<dyn Error>> {
+        self.spawn_entity()
+            .with(Sprite {
+                texture: resources::load_and_set_filter("images/content/slime.png").await?,
+                source_rect: Some(Rect::new(0.0, 0.0, 32.0, 32.0)),
+                dest_size: Some(Vec2::new(32.0, 32.0)),
+                animation: Some(AnimatedSprite::new(
+                    32,
+                    32,
+                    &[
+                        Animation {
+                            name: "idle".to_string(),
+                            row: 0,
+                            frames: 4,
+                            fps: 4,
+                        },
+                        Animation {
+                            name: "idle_sides".to_string(),
+                            row: 1,
+                            frames: 4,
+                            fps: 4,
+                        },
+                        Animation {
+                            name: "idle_up".to_string(),
+                            row: 2,
+                            frames: 4,
+                            fps: 4,
+                        },
+                        Animation {
+                            name: "move_down".to_string(),
+                            row: 3,
+                            frames: 4,
+                            fps: 4,
+                        },
+                        Animation {
+                            name: "move_sides".to_string(),
+                            row: 4,
+                            frames: 4,
+                            fps: 4,
+                        },
+                        Animation {
+                            name: "move_up".to_string(),
+                            row: 5,
+                            frames: 4,
+                            fps: 4,
+                        },
+                    ],
+                    true,
+                )),
+                flipped: false,
+                last_animation: 0,
+            })
+            .with(Position { x, y })
+            .with(Collider {
+                visible_size: Vec2::new(16.0, 16.0),
+                sprite_padding: Vec2::new(8.0, 8.0),
+                collision_offset: Vec2::new(24.0, 16.0),
+                collision_size: Vec2::new(8.0, 4.0),
+            })
+            .with(EntityType::Enemy)
+            .with(Enemy::default())
+            .with(Velocity { x: 8.0, y: 8.0 });
 
         Ok(())
     }
@@ -286,7 +337,6 @@ impl World {
                 last_animation: 0,
             })
             .with(Position { x, y })
-            .with(Controllable::default())
             .with(Velocity::default())
             .with(Collider {
                 collision_offset: Vec2::new(17., 38.),
@@ -294,8 +344,8 @@ impl World {
                 sprite_padding: Vec2::new(18.0, 20.0),
                 visible_size: Vec2::new(18.0, 26.0),
             })
-            .with(AttackState::default())
-            .with(Player);
+            .with(EntityType::Player)
+            .with(Player::default());
         Ok(())
     }
 }

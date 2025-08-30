@@ -3,17 +3,18 @@ use macroquad::{
     color::{RED, WHITE},
     input::{is_key_down, KeyCode},
     math::{Rect, Vec2},
+    prelude::animation::{AnimatedSprite, Animation},
     shapes::draw_rectangle,
     texture::{draw_texture_ex, DrawTextureParams},
     time::get_frame_time,
-    window::{screen_height, screen_width},
 };
 use macroquad_tiled::Map;
 
 use crate::{
-    components::{AttackState, Collider, Controllable, Player, Position, Sprite, Velocity},
+    components::{AIType, Collider, Enemy, Player, Position, Sprite, Velocity},
+    entity::EntityType,
     resources::{self, Resources},
-    world::{self, World},
+    world::{self, World, WORLD_HEIGHT, WORLD_WIDTH},
 };
 
 pub fn render_systems(world: &mut World) {
@@ -39,59 +40,49 @@ pub fn render_systems(world: &mut World) {
     }
 }
 
-pub fn tilemap_render_system(tiled_map: &Map) {
-    tiled_map.draw_tiles("background", Rect::new(0.0, 0.0, 960.0, 512.0), None);
-    tiled_map.draw_tiles("decorations", Rect::new(0.0, 0.0, 960.0, 512.0), None);
-    tiled_map.draw_tiles("decorations_2", Rect::new(0.0, 0.0, 960.0, 512.0), None);
+pub fn tilemap_render_system(tiled_map: &Map, world: &mut World) {
+    tiled_map.draw_tiles(
+        "background",
+        Rect::new(0.0, 0.0, WORLD_WIDTH, WORLD_HEIGHT),
+        None,
+    );
+    tiled_map.draw_tiles(
+        "decorations",
+        Rect::new(0.0, 0.0, WORLD_WIDTH, WORLD_HEIGHT),
+        None,
+    );
+    tiled_map.draw_tiles(
+        "decorations_2",
+        Rect::new(0.0, 0.0, WORLD_WIDTH, WORLD_HEIGHT),
+        None,
+    );
+
+    // render order here
+    render_systems(world);
+
+    tiled_map.draw_tiles(
+        "foreground",
+        Rect::new(0.0, 0.0, WORLD_WIDTH, WORLD_HEIGHT),
+        None,
+    );
+}
+
+fn player_animation_system(world: &mut World) {
+    for (sprite, velocity, player) in world.query::<(&mut Sprite, &Velocity, &Player)>() {
+        player.handle_player_animation(velocity, sprite, player);
+    }
+}
+
+fn enemy_animation_system(world: &mut World) {
+    for (sprite, velocity, enemy) in world.query::<(&mut Sprite, &Velocity, &Enemy)>() {
+        enemy.handle_enemy_animation(velocity, sprite, enemy);
+    }
 }
 
 pub fn animation_systems(world: &mut World) {
     // update moving animation
-    for (sprite, velocity, attack_state) in world.query::<(&mut Sprite, &Velocity, &AttackState)>()
-    {
-        if let Some(ref mut anim) = sprite.animation {
-            if velocity.x != 0.0 || velocity.y != 0.0 {
-                let animation_index = match (velocity.x, velocity.y) {
-                    (x, _) if x > 0.0 => {
-                        sprite.flipped = false;
-                        2
-                    } // right
-                    (x, _) if x < 0.0 => {
-                        sprite.flipped = true;
-                        2
-                    } // left
-                    (_, y) if y < 0.0 => {
-                        sprite.flipped = false;
-                        4
-                    } // up
-                    (_, y) if y > 0.0 => {
-                        sprite.flipped = false;
-                        1
-                    } // down
-                    _ => sprite.last_animation,
-                };
-                sprite.last_animation = animation_index;
-                anim.set_animation(animation_index);
-            } else {
-                let idle_animation = match sprite.last_animation {
-                    2 => 3, // right -> idle_right
-                    4 => 5, // up -> up_idle
-                    _ => 0, // default idle
-                };
-                anim.set_animation(idle_animation);
-            }
-            if attack_state.attacking {
-                anim.set_animation(match sprite.last_animation {
-                    2 => 7,
-                    4 => 8,
-                    1 => 6,
-                    _ => 0,
-                });
-            }
-
-            anim.update();
-        }
-    }
+    player_animation_system(world);
+    enemy_animation_system(world);
 
     // update unmoving entities
     for sprite in world.query::<&mut Sprite>() {
@@ -102,42 +93,61 @@ pub fn animation_systems(world: &mut World) {
 }
 
 pub fn input_systems(world: &mut World) {
-    for (velocity, controllable) in world.query::<(&mut Velocity, &Controllable)>() {
+    for (velocity, player) in world.query::<(&mut Velocity, &mut Player)>() {
         velocity.x = 0.;
         velocity.y = 0.;
 
+        // movement related keypresses
         if is_key_down(KeyCode::Up) {
-            velocity.y = -controllable.walk_speed
+            velocity.y = -player.walk_speed
         }
         if is_key_down(KeyCode::Down) {
-            velocity.y = controllable.walk_speed
+            velocity.y = player.walk_speed
         }
         if is_key_down(KeyCode::Left) {
-            velocity.x = -controllable.walk_speed
+            velocity.x = -player.walk_speed
         }
         if is_key_down(KeyCode::Right) {
-            velocity.x = controllable.walk_speed
+            velocity.x = player.walk_speed
         }
+
         // normalize diagonal movement
         let length = (velocity.x * velocity.x + velocity.y * velocity.y).sqrt();
         if length > 0.0 {
-            velocity.x = (velocity.x / length) * controllable.walk_speed;
-            velocity.y = (velocity.y / length) * controllable.walk_speed;
+            velocity.x = (velocity.x / length) * player.walk_speed;
+            velocity.y = (velocity.y / length) * player.walk_speed;
         }
-    }
 
-    for attack_state in world.query::<&mut AttackState>() {
+        // attack related kepresses
         if is_key_down(KeyCode::Z) {
-            attack_state.attacking = true;
-            attack_state.attack_timer = 0.3;
+            player.attacking = true;
+            player.attack_timer = 0.3;
         }
 
         // countdown attack_timer
-        if attack_state.attack_timer >= 0.0 {
-            attack_state.attack_timer -= get_frame_time();
-            if attack_state.attack_timer <= 0.0 {
-                attack_state.attacking = false;
+        if player.attack_timer >= 0.0 {
+            player.attack_timer -= get_frame_time();
+            if player.attack_timer <= 0.0 {
+                player.attacking = false;
             }
+        }
+    }
+}
+
+pub fn enemy_movement_systems(world: &mut World) {
+    let dt = get_frame_time();
+    for (velocity, enemy) in world.query::<(&mut Velocity, &mut Enemy)>() {
+        match enemy.ai_type {
+            AIType::Wander => {
+                enemy.movement_timer += dt;
+
+                if enemy.movement_timer >= enemy.change_direction_interval {
+                    println!("here");
+                    enemy.movement_timer = 0.;
+                    enemy.change_direction(velocity, enemy.walk_speed);
+                }
+            }
+            _ => {}
         }
     }
 }
@@ -154,10 +164,10 @@ pub fn movement_systems(world: &mut World, map: &Map) {
         );
 
         if !check_collision_with_objects(collision_box, &map) {
-            let clamped_x =
-                (new_pos.x + collider.sprite_padding.x).clamp(0.0, 960.0 - collider.visible_size.x);
-            let clamped_y =
-                (new_pos.y + collider.sprite_padding.y).clamp(0.0, 512.0 - collider.visible_size.y);
+            let clamped_x = (new_pos.x + collider.sprite_padding.x)
+                .clamp(0.0, WORLD_WIDTH - collider.visible_size.x);
+            let clamped_y = (new_pos.y + collider.sprite_padding.y)
+                .clamp(0.0, WORLD_HEIGHT - collider.visible_size.y);
 
             position.x = clamped_x - collider.sprite_padding.x;
             position.y = clamped_y - collider.sprite_padding.y;
@@ -187,11 +197,8 @@ pub fn camera_systems(world: &mut World, resources: &mut Resources) {
         let target_x = position.x + 24.0; // center on player
         let target_y = position.y + 24.0;
 
-        let viewport_width = 2.0 / &resources.camera.zoom.x;
-        let viewport_height = 2.0 / &resources.camera.zoom.y;
-
-        let clamped_x = target_x.clamp(256.0, 960.0 - 256.0);
-        let clamped_y = target_y.clamp(144.0, 512.0 - 144.0);
+        let clamped_x = target_x.clamp(256.0, WORLD_WIDTH - 256.0);
+        let clamped_y = target_y.clamp(144.0, WORLD_HEIGHT - 144.0);
         resources.camera.target = Vec2::new(clamped_x, clamped_y);
 
         set_camera(&resources.camera);
