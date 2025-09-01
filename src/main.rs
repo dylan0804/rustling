@@ -35,9 +35,6 @@ async fn run() -> Result<(), Box<dyn Error>> {
     let mut world = World::new();
     let mut resources = Resources::load_all(&mut world).await?;
 
-    world.spawn_enemy(250., 250.).await?;
-    world.spawn_player(232., 232.).await?;
-
     loop {
         clear_background(BLANK);
 
@@ -45,8 +42,11 @@ async fn run() -> Result<(), Box<dyn Error>> {
 
         systems::animation_systems(&mut world);
         systems::input_systems(&mut world);
+        systems::enemy_aggro_system(&mut world);
+        systems::player_attack_system(&mut world);
 
         systems::enemy_movement_systems(&mut world);
+        systems::hit_systems(&mut world);
         systems::movement_systems(&mut world, &resources.tiled_map);
         systems::camera_systems(&mut world, &mut resources);
         next_frame().await;

@@ -1,6 +1,12 @@
 use crate::{
-    components::{Collider, Enemy, Player, Position, Sprite, Velocity},
-    entity::EntityType,
+    components::{
+        collider::Collider,
+        enemy::{self, Enemy},
+        player::Player,
+        position::Position,
+        sprite::Sprite,
+        velocity::Velocity,
+    },
     world::World,
 };
 
@@ -20,6 +26,24 @@ impl<'a> ComponentQuery<'a> for (&'a Sprite, &'a Position) {
                 world.get_component::<Position>(entity),
             ) {
                 entities.push((sprite, position));
+            }
+        }
+        entities
+    }
+}
+
+impl<'a> ComponentQuery<'a> for (&'a Position, &'a Collider, &'a Enemy) {
+    type Output = (&'a Position, &'a Collider, &'a Enemy);
+
+    fn find_entities(world: &'a mut World) -> Vec<Self::Output> {
+        let mut entities = Vec::new();
+        for entity in 0..world.entities_count {
+            if let (Some(position), Some(collider), Some(enemy)) = (
+                world.get_component::<Position>(entity),
+                world.get_component::<Collider>(entity),
+                world.get_component::<Enemy>(entity),
+            ) {
+                entities.push((position, collider, enemy));
             }
         }
         entities
@@ -47,6 +71,29 @@ impl<'a> ComponentQuery<'a> for (&'a mut Velocity, &'a mut Player) {
     }
 }
 
+impl<'a> ComponentQuery<'a> for (&'a Position, &'a Collider, &'a mut Enemy) {
+    type Output = (&'a Position, &'a Collider, &'a mut Enemy);
+
+    fn find_entities(world: &'a mut World) -> Vec<Self::Output> {
+        let mut entities = Vec::new();
+
+        unsafe {
+            let world_ptr = &raw mut *world;
+            for entity in 0..(*world_ptr).entities_count {
+                if let (Some(position), Some(collider), Some(enemy)) = (
+                    (*world_ptr).get_component::<Position>(entity),
+                    (*world_ptr).get_component::<Collider>(entity),
+                    (*world_ptr).get_component_mut::<Enemy>(entity),
+                ) {
+                    entities.push((position, collider, enemy));
+                }
+            }
+        }
+
+        entities
+    }
+}
+
 impl<'a> ComponentQuery<'a> for (&'a mut Sprite, &'a Velocity, &'a Player) {
     type Output = (&'a mut Sprite, &'a Velocity, &'a Player);
 
@@ -70,8 +117,8 @@ impl<'a> ComponentQuery<'a> for (&'a mut Sprite, &'a Velocity, &'a Player) {
     }
 }
 
-impl<'a> ComponentQuery<'a> for (&'a mut Sprite, &'a Velocity, &'a Enemy) {
-    type Output = (&'a mut Sprite, &'a Velocity, &'a Enemy);
+impl<'a> ComponentQuery<'a> for (&'a mut Sprite, &'a Velocity, &'a mut Enemy) {
+    type Output = (&'a mut Sprite, &'a Velocity, &'a mut Enemy);
 
     fn find_entities(world: &'a mut World) -> Vec<Self::Output> {
         let mut entities = Vec::new();
@@ -82,7 +129,7 @@ impl<'a> ComponentQuery<'a> for (&'a mut Sprite, &'a Velocity, &'a Enemy) {
                 if let (Some(sprite), Some(velocity), Some(enemy)) = (
                     (*world_ptr).get_component_mut::<Sprite>(entity),
                     (*world_ptr).get_component::<Velocity>(entity),
-                    (*world_ptr).get_component::<Enemy>(entity),
+                    (*world_ptr).get_component_mut::<Enemy>(entity),
                 ) {
                     entities.push((sprite, velocity, enemy));
                 }
@@ -132,6 +179,46 @@ impl<'a> ComponentQuery<'a> for (&'a Position, &'a Player) {
     }
 }
 
+impl<'a> ComponentQuery<'a> for (&'a Position, &'a mut Player) {
+    type Output = (&'a Position, &'a mut Player);
+
+    fn find_entities(world: &'a mut World) -> Vec<Self::Output> {
+        let mut entities = Vec::new();
+        unsafe {
+            let world_ptr = &raw mut *world;
+            for entity in 0..world.entities_count {
+                if let (Some(position), Some(player)) = (
+                    (*world_ptr).get_component::<Position>(entity),
+                    (*world_ptr).get_component_mut::<Player>(entity),
+                ) {
+                    entities.push((position, player));
+                }
+            }
+        }
+        entities
+    }
+}
+
+impl<'a> ComponentQuery<'a> for (&'a Position, &'a mut Enemy) {
+    type Output = (&'a Position, &'a mut Enemy);
+
+    fn find_entities(world: &'a mut World) -> Vec<Self::Output> {
+        let mut entities = Vec::new();
+        unsafe {
+            let world_ptr = &raw mut *world;
+            for entity in 0..world.entities_count {
+                if let (Some(position), Some(enemy)) = (
+                    (*world_ptr).get_component::<Position>(entity),
+                    (*world_ptr).get_component_mut::<Enemy>(entity),
+                ) {
+                    entities.push((position, enemy));
+                }
+            }
+        }
+        entities
+    }
+}
+
 impl<'a> ComponentQuery<'a> for &'a mut Sprite {
     type Output = &'a mut Sprite;
 
@@ -151,8 +238,46 @@ impl<'a> ComponentQuery<'a> for &'a mut Sprite {
     }
 }
 
-impl<'a> ComponentQuery<'a> for (&'a mut Velocity, &'a mut Enemy) {
-    type Output = (&'a mut Velocity, &'a mut Enemy);
+impl<'a> ComponentQuery<'a> for &'a mut Enemy {
+    type Output = &'a mut Enemy;
+
+    fn find_entities(world: &'a mut World) -> Vec<Self::Output> {
+        let mut entities = Vec::new();
+
+        unsafe {
+            let world_ptr = &raw mut *world;
+            for entity in 0..(*world_ptr).entities_count {
+                if let Some(enemy) = (*world_ptr).get_component_mut::<Enemy>(entity) {
+                    entities.push(enemy);
+                }
+            }
+        }
+
+        entities
+    }
+}
+
+impl<'a> ComponentQuery<'a> for &'a mut Player {
+    type Output = &'a mut Player;
+
+    fn find_entities(world: &'a mut World) -> Vec<Self::Output> {
+        let mut entities = Vec::new();
+
+        unsafe {
+            let world_ptr = &raw mut *world;
+            for entity in 0..(*world_ptr).entities_count {
+                if let Some(player) = (*world_ptr).get_component_mut::<Player>(entity) {
+                    entities.push(player);
+                }
+            }
+        }
+
+        entities
+    }
+}
+
+impl<'a> ComponentQuery<'a> for (&'a Position, &'a mut Velocity, &'a mut Enemy) {
+    type Output = (&'a Position, &'a mut Velocity, &'a mut Enemy);
 
     fn find_entities(world: &'a mut World) -> Vec<Self::Output> {
         let mut entities = Vec::new();
@@ -160,11 +285,12 @@ impl<'a> ComponentQuery<'a> for (&'a mut Velocity, &'a mut Enemy) {
             let world_ptr = &raw mut *world;
 
             for entity in 0..(*world_ptr).entities_count {
-                if let (Some(velocity), Some(enemy)) = (
+                if let (Some(position), Some(velocity), Some(enemy)) = (
+                    (*world_ptr).get_component::<Position>(entity),
                     (*world_ptr).get_component_mut::<Velocity>(entity),
                     (*world_ptr).get_component_mut::<Enemy>(entity),
                 ) {
-                    entities.push((velocity, enemy));
+                    entities.push((position, velocity, enemy));
                 }
             }
         }

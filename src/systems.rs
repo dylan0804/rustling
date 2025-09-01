@@ -3,7 +3,6 @@ use macroquad::{
     color::{RED, WHITE},
     input::{is_key_down, KeyCode},
     math::{Rect, Vec2},
-    prelude::animation::{AnimatedSprite, Animation},
     shapes::draw_rectangle,
     texture::{draw_texture_ex, DrawTextureParams},
     time::get_frame_time,
@@ -11,9 +10,16 @@ use macroquad::{
 use macroquad_tiled::Map;
 
 use crate::{
-    components::{AIType, Collider, Enemy, Player, Position, Sprite, Velocity},
-    entity::EntityType,
-    resources::{self, Resources},
+    components::{
+        collider::Collider,
+        direction::Direction,
+        enemy::{AIType, Enemy},
+        player::{self, Player},
+        position::Position,
+        sprite::Sprite,
+        velocity::Velocity,
+    },
+    resources::Resources,
     world::{self, World, WORLD_HEIGHT, WORLD_WIDTH},
 };
 
@@ -74,8 +80,8 @@ fn player_animation_system(world: &mut World) {
 }
 
 fn enemy_animation_system(world: &mut World) {
-    for (sprite, velocity, enemy) in world.query::<(&mut Sprite, &Velocity, &Enemy)>() {
-        enemy.handle_enemy_animation(velocity, sprite, enemy);
+    for (sprite, velocity, enemy) in world.query::<(&mut Sprite, &Velocity, &mut Enemy)>() {
+        enemy.handle_enemy_animation(velocity, sprite);
     }
 }
 
@@ -99,16 +105,20 @@ pub fn input_systems(world: &mut World) {
 
         // movement related keypresses
         if is_key_down(KeyCode::Up) {
-            velocity.y = -player.walk_speed
+            velocity.y = -player.walk_speed;
+            player.last_direction = Direction::Up;
         }
         if is_key_down(KeyCode::Down) {
-            velocity.y = player.walk_speed
+            velocity.y = player.walk_speed;
+            player.last_direction = Direction::Down;
         }
         if is_key_down(KeyCode::Left) {
-            velocity.x = -player.walk_speed
+            velocity.x = -player.walk_speed;
+            player.last_direction = Direction::Left;
         }
         if is_key_down(KeyCode::Right) {
-            velocity.x = player.walk_speed
+            velocity.x = player.walk_speed;
+            player.last_direction = Direction::Right;
         }
 
         // normalize diagonal movement
@@ -134,20 +144,175 @@ pub fn input_systems(world: &mut World) {
     }
 }
 
+pub fn enemy_aggro_system(world: &mut World) {
+    let player_pos =
+        if let Some((position, _)) = world.query::<(&Position, &Player)>().iter().next() {
+            Vec2::new(position.x, position.y)
+        } else {
+            return;
+        };
+
+    for (enemy_pos, enemy) in world.query::<(&Position, &mut Enemy)>() {
+        let enemy_pos_vec = Vec2::new(enemy_pos.x, enemy_pos.y);
+        if !matches!(enemy.ai_type, AIType::Dead) {
+            if enemy.should_attack_player(enemy_pos_vec, player_pos, enemy.attack_range) {
+                enemy.ai_type = AIType::Attack;
+            } else if enemy.should_chase_player(enemy_pos_vec, player_pos, enemy.aggro_range) {
+                enemy.ai_type = AIType::ChasePlayer;
+            } else {
+                enemy.ai_type = AIType::Wander;
+            }
+        }
+    }
+}
+
 pub fn enemy_movement_systems(world: &mut World) {
+    let player_pos =
+        if let Some((position, _)) = world.query::<(&Position, &Player)>().iter().next() {
+            Vec2::new(position.x + 23., position.y + 29.)
+        } else {
+            return;
+        };
+
     let dt = get_frame_time();
-    for (velocity, enemy) in world.query::<(&mut Velocity, &mut Enemy)>() {
+
+    for (enemy_pos, velocity, enemy) in world.query::<(&Position, &mut Velocity, &mut Enemy)>() {
+        // + 12 to account for sprite padding
+        let enemy_position = Vec2::new(enemy_pos.x + 12., enemy_pos.y + 12.);
+        let direction = (player_pos - enemy_position).normalize();
+
         match enemy.ai_type {
             AIType::Wander => {
+                enemy.attacking = false;
                 enemy.movement_timer += dt;
 
                 if enemy.movement_timer >= enemy.change_direction_interval {
-                    println!("here");
                     enemy.movement_timer = 0.;
                     enemy.change_direction(velocity, enemy.walk_speed);
                 }
             }
-            _ => {}
+            AIType::ChasePlayer => {
+                enemy.attacking = false;
+                velocity.x = direction.x * enemy.chase_speed;
+                velocity.y = direction.y * enemy.chase_speed;
+            }
+            AIType::Attack => {
+                enemy.attack_timer += dt;
+                if enemy.attack_timer >= enemy.attack_interval {
+                    enemy.attack_timer = 0.;
+                    enemy.attacking = true;
+                    enemy.attack_animation_timer = 0.;
+                }
+
+                if enemy.attacking {
+                    enemy.attack_animation_timer += dt;
+
+                    // Keep moving during the entire attack animation
+                    velocity.x = direction.x * enemy.attack_speed;
+                    velocity.y = direction.y * enemy.attack_speed;
+
+                    if enemy.attack_animation_timer >= enemy.attack_animation_duration {
+                        enemy.attacking = false;
+                    }
+                } else {
+                    velocity.x = 0.;
+                    velocity.y = 0.;
+                }
+            }
+            AIType::Dead => {
+                velocity.x = 0.;
+                velocity.y = 0.;
+            }
+        }
+    }
+}
+
+pub fn player_attack_system(world: &mut World) {
+    let dt = get_frame_time();
+
+    // u enemy cooldowns first
+    for enemy in world.query::<&mut Enemy>() {
+        if enemy.hit_cooldown > 0.0 {
+            enemy.hit_cooldown -= dt;
+        }
+    }
+
+    let (attack_rect, is_attacking) =
+        if let Some((position, player)) = world.query::<(&Position, &Player)>().iter().next() {
+            let attack_rect = match player.last_direction {
+                Direction::Right => Rect::new(position.x + 30.0, position.y + 24.0, 15.0, 20.0),
+                Direction::Left => Rect::new(position.x + 3.0, position.y + 24.0, 15.0, 20.0),
+                Direction::Up => Rect::new(position.x + 14.0, position.y + 18.0, 20.0, 20.0),
+                Direction::Down => Rect::new(position.x + 15.0, position.y + 36.0, 20.0, 15.0),
+            };
+            (attack_rect, player.attacking)
+        } else {
+            return;
+        };
+
+    if is_attacking {
+        for (enemy_pos, enemy_collider, enemy) in
+            world.query::<(&Position, &Collider, &mut Enemy)>()
+        {
+            if !matches!(enemy.ai_type, AIType::Dead) {
+                let enemy_rect = Rect::new(
+                    enemy_pos.x + 10.0,
+                    enemy_pos.y + 10.0,
+                    enemy_collider.collision_size.x,
+                    enemy_collider.collision_size.y,
+                );
+
+                if attack_rect.overlaps(&enemy_rect) && enemy.hit_cooldown <= 0.0 {
+                    enemy.ai_type = AIType::Dead;
+                }
+            }
+        }
+    }
+}
+
+fn is_player_hit(player_rect: &Rect, enemy_rect: &Rect) -> bool {
+    player_rect.overlaps(&enemy_rect)
+}
+
+pub fn hit_systems(world: &mut World) {
+    let dt = get_frame_time();
+
+    for player in world.query::<&mut Player>() {
+        if player.hit_cooldown_timer > 0.0 {
+            player.hit_cooldown_timer -= dt;
+        }
+    }
+
+    let mut player_was_hit = false;
+
+    let (player_rect, cooldown_timer) =
+        if let Some((position, player)) = world.query::<(&Position, &Player)>().iter().next() {
+            (
+                Rect::new(position.x + 18., position.y + 20., 13., 22.),
+                player.hit_cooldown_timer,
+            )
+        } else {
+            return;
+        };
+
+    for (position, collider, enemy) in world.query::<(&Position, &Collider, &Enemy)>() {
+        if enemy.attacking && cooldown_timer <= 0.0 {
+            let enemy_rect = Rect::new(
+                position.x + 8.0,
+                position.y + 8.0,
+                collider.collision_size.x,
+                collider.collision_size.y,
+            );
+            if is_player_hit(&player_rect, &enemy_rect) {
+                player_was_hit = true;
+                break;
+            }
+        }
+    }
+
+    if player_was_hit {
+        for player in world.query::<&mut Player>() {
+            player.hit_cooldown_timer = player.hit_cooldown_duration;
         }
     }
 }

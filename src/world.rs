@@ -1,4 +1,4 @@
-use std::{any::Any, collections::HashMap, error::Error, vec};
+use std::{any::Any, collections::HashMap, error::Error};
 
 use macroquad::{
     math::{Rect, Vec2},
@@ -8,8 +8,15 @@ use macroquad::{
 use macroquad_tiled::Object;
 
 use crate::{
-    components::{Collider, Enemy, Player, Position, Sprite, Velocity},
-    entity::{Entity, EntityType},
+    components::{
+        collider::Collider,
+        enemy::{animated_skeleton, animated_slime, Enemy},
+        player::Player,
+        position::Position,
+        sprite::Sprite,
+        velocity::Velocity,
+    },
+    entity::Entity,
     query::ComponentQuery,
     resources,
 };
@@ -194,67 +201,40 @@ impl World {
         Ok(())
     }
 
-    pub async fn spawn_enemy(&mut self, x: f32, y: f32) -> Result<(), Box<dyn Error>> {
+    pub async fn spawn_enemy(&mut self, x: f32, y: f32, enemy: &str) -> Result<(), Box<dyn Error>> {
         self.spawn_entity()
             .with(Sprite {
-                texture: resources::load_and_set_filter("images/content/slime.png").await?,
+                texture: resources::load_and_set_filter(&format!("images/content/{}.png", enemy))
+                    .await?,
                 source_rect: Some(Rect::new(0.0, 0.0, 32.0, 32.0)),
-                dest_size: Some(Vec2::new(32.0, 32.0)),
-                animation: Some(AnimatedSprite::new(
-                    32,
-                    32,
-                    &[
-                        Animation {
-                            name: "idle".to_string(),
-                            row: 0,
-                            frames: 4,
-                            fps: 4,
-                        },
-                        Animation {
-                            name: "idle_sides".to_string(),
-                            row: 1,
-                            frames: 4,
-                            fps: 4,
-                        },
-                        Animation {
-                            name: "idle_up".to_string(),
-                            row: 2,
-                            frames: 4,
-                            fps: 4,
-                        },
-                        Animation {
-                            name: "move_down".to_string(),
-                            row: 3,
-                            frames: 4,
-                            fps: 4,
-                        },
-                        Animation {
-                            name: "move_sides".to_string(),
-                            row: 4,
-                            frames: 4,
-                            fps: 4,
-                        },
-                        Animation {
-                            name: "move_up".to_string(),
-                            row: 5,
-                            frames: 4,
-                            fps: 4,
-                        },
-                    ],
-                    true,
-                )),
+                dest_size: match enemy {
+                    "skeleton" => Some(Vec2::new(48.0, 48.0)),
+                    _ => Some(Vec2::new(32.0, 32.0)),
+                },
+                animation: match enemy {
+                    "skeleton" => animated_skeleton(),
+                    _ => animated_slime(),
+                },
                 flipped: false,
                 last_animation: 0,
             })
             .with(Position { x, y })
             .with(Collider {
-                visible_size: Vec2::new(16.0, 16.0),
+                visible_size: match enemy {
+                    "skeleton" => Vec2::new(32.0, 32.0),
+                    _ => Vec2::new(16.0, 16.0),
+                },
                 sprite_padding: Vec2::new(8.0, 8.0),
                 collision_offset: Vec2::new(24.0, 16.0),
-                collision_size: Vec2::new(8.0, 4.0),
+                collision_size: Vec2::new(16.0, 16.0),
             })
-            .with(EntityType::Enemy)
-            .with(Enemy::default())
+            .with(match enemy {
+                "skeleton" => Enemy {
+                    attack_range: 5.,
+                    ..Default::default()
+                },
+                _ => Enemy::default(),
+            })
             .with(Velocity { x: 8.0, y: 8.0 });
 
         Ok(())
@@ -271,60 +251,70 @@ impl World {
                     48,
                     &[
                         Animation {
+                            // 0
                             name: "idle".to_string(),
                             row: 0,
                             frames: 6,
                             fps: 4,
                         },
                         Animation {
+                            // 1
                             name: "down".to_string(),
                             row: 3,
                             frames: 6,
                             fps: 4,
                         },
                         Animation {
+                            // 2
                             name: "right".to_string(),
                             row: 4,
                             frames: 6,
                             fps: 4,
                         },
                         Animation {
+                            // 3
                             name: "idle_right".to_string(),
                             row: 1,
                             frames: 6,
                             fps: 4,
                         },
                         Animation {
+                            // 4
                             name: "up".to_string(),
                             row: 5,
                             frames: 6,
                             fps: 4,
                         },
                         Animation {
+                            // 5
                             name: "up_idle".to_string(),
                             row: 2,
                             frames: 6,
                             fps: 4,
                         },
                         Animation {
+                            // 6
                             name: "attack_down".to_string(),
                             row: 6,
                             frames: 4,
                             fps: 4,
                         },
                         Animation {
+                            // 7
                             name: "attack_sides".to_string(),
                             row: 7,
                             frames: 4,
                             fps: 4,
                         },
                         Animation {
+                            // 8
                             name: "attack_up".to_string(),
                             row: 8,
                             frames: 4,
                             fps: 4,
                         },
                         Animation {
+                            // 9
                             name: "death".to_string(),
                             row: 9,
                             frames: 3,
@@ -344,7 +334,6 @@ impl World {
                 sprite_padding: Vec2::new(18.0, 20.0),
                 visible_size: Vec2::new(18.0, 26.0),
             })
-            .with(EntityType::Player)
             .with(Player::default());
         Ok(())
     }
