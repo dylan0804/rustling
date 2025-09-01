@@ -16,7 +16,7 @@ use crate::{
         sprite::Sprite,
         velocity::Velocity,
     },
-    entity::Entity,
+    entity::entity::Entity,
     query::ComponentQuery,
     resources,
 };

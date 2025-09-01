@@ -2,7 +2,14 @@ use std::error::Error;
 
 use macroquad::prelude::*;
 
-use crate::{resources::Resources, world::World};
+use crate::{
+    resources::Resources,
+    systems::systems::{
+        animation_systems, camera_systems, enemy_aggro_system, enemy_movement_systems, hit_systems,
+        input_systems, movement_systems, player_attack_system, tilemap_render_system,
+    },
+    world::World,
+};
 
 pub mod components;
 pub mod entity;
@@ -38,17 +45,17 @@ async fn run() -> Result<(), Box<dyn Error>> {
     loop {
         clear_background(BLANK);
 
-        systems::tilemap_render_system(&resources.tiled_map, &mut world);
+        tilemap_render_system(&resources.tiled_map, &mut world);
 
-        systems::animation_systems(&mut world);
-        systems::input_systems(&mut world);
-        systems::enemy_aggro_system(&mut world);
-        systems::player_attack_system(&mut world);
+        animation_systems(&mut world);
+        input_systems(&mut world);
+        enemy_aggro_system(&mut world);
+        player_attack_system(&mut world);
 
-        systems::enemy_movement_systems(&mut world);
-        systems::hit_systems(&mut world);
-        systems::movement_systems(&mut world, &resources.tiled_map);
-        systems::camera_systems(&mut world, &mut resources);
+        enemy_movement_systems(&mut world);
+        hit_systems(&mut world);
+        movement_systems(&mut world, &resources.tiled_map);
+        camera_systems(&mut world, &mut resources);
         next_frame().await;
     }
 }

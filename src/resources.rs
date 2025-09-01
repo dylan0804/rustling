@@ -5,20 +5,12 @@ use macroquad::{
     camera::Camera2D,
     file::load_string,
     math::{Rect, Vec2},
-    prelude::{
-        animation::{AnimatedSprite, Animation},
-        collections::storage,
-    },
     texture::{load_texture, FilterMode, Texture2D},
     window::{screen_height, screen_width},
 };
 use macroquad_tiled::Map;
 
-use crate::{
-    components::{Position, Sprite},
-    resources,
-    world::{self, World},
-};
+use crate::world::{self, World};
 
 static CORE_ASSETS_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/assets");
 
